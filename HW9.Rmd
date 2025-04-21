@@ -26,6 +26,7 @@ library(stringr)
 library(boot)
 library(mosaic)
 library(MatchIt)
+library(moderndive)
 ```
 
 # Introduction
@@ -45,14 +46,14 @@ ggsolder + geom_boxplot(aes(y=skips, fill=Opening)) + facet_wrap(~Opening) +
   labs(title = "Distribution of Solder Skips by Solder Gun Opening Size", y = "Skips") +
    theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())
 ```
-From this plot, we can easily see that the size of the opening affects the amount of solder skips by examining the faceted box plots' vertical placement.
+From this plot, we can easily see that **the size of the opening positively affects the amount of solder skips** by examining the faceted box plots' vertical placement.
 
 ```{r, fig.height = 3}
 ggsolder + geom_boxplot(aes(y=skips, fill = Solder)) + facet_wrap(~Solder) + 
   labs(title = "Distribution of Solder Skips by Alloy Thickness", y = "Skips") +
    theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())
 ```
-From this plot, we can see that alloy thickness has an effect on the amount of solder skips, with thinner alloys contributing to usually higher amounts of solder skips.
+From this plot, we can see that **alloy thickness has an effect on the amount of solder skips**, with thinner alloys contributing to usually higher amounts of solder skips.
 
 ## Part B
 ```{r}
@@ -164,31 +165,75 @@ knitr::kable(combos, caption = "Combinations of Solder Thicknesses and Solder Gu
 
 Since soldering skips are manufacturing defects, I'd like to recommend the combination with the least amount of defects which is **SolderThick and OpeningLarge**. This trend is also seen in the earlier plots, as a thick solder and a large solder gun opening each had the least average skips in their categories.
 
-
-
 # Problem 2
+```{r}
+groceries = read.csv("groceries.csv")
+```
 
 ## Part A
+```{r, fig.width = 8, fig.height = 4}
+avg_price_store = groceries %>% group_by(Store) %>% 
+  summarize(avg_price = mean(Price, na.rm = TRUE))
+
+ggplot(avg_price_store) + geom_col(aes(x = reorder(Store, avg_price), y = avg_price), col = "black", fill = "skyblue") + 
+  coord_flip() + labs(title = "Average Price of Products by Store", y = "Price (in dollars)", x = "")
+```
+This graph above shows the average price of a arbitrary product by store.
 
 ## Part B
+```{r, fig.height = 6, fig.width = 10}
+product_by_store = groceries %>% group_by(Product) %>% summarize(freq = n())
+
+ggplot(product_by_store) + geom_col(aes(x = reorder(Product, freq), y= freq), col = "black", fill = "skyblue") + 
+  coord_flip() +
+  labs(title = "Products by Number of Stores Selling", x = "Product", y = "Stores")
+```
+This graph above shows the amount of stores that carry/sell each of these products.
 
 ## Part C
+```{r, cache = TRUE}
+results_type = do(10000) * {
+  type_model = lm(Price ~ Product + Type, data = mosaic::resample(groceries))
+  grocery_i = as.numeric(coef(type_model)["TypeGrocery"])
+  data.frame(grocery_increase = grocery_i)
+}
+```
+
+```{r, message = FALSE}
+ci_grocery_store = confint(results_type$grocery_increase, level = 0.95)
+est_grocery_store = mean(results_type$grocery_increase)
+```
+
+Compared with ordinary grocery stores (like Albertsons, HEB, or Krogers), **convenience stores charge somewhere between $0.45 and $0.88 more for the same product**.
 
 ## Part D
+```{r}
+store_model = lm(Price ~ Product + Store, data = groceries)
+stores = coef(store_model) %>% round(5)
+```
+
+The two stores that charge the lowest prices for the same product are **Walmart (-0.99) and Kroger Fresh Fare (-0.90)**.
+The two stores that charge the highest prices for the same product are **Whole Foods (+0.36) and Wheatsville Food Co-Op (+0.29)**.
 
 ## Part E
+The coefficient for H-E-B is -0.65 while the coefficient for Central Market is -0.57, giving a difference of about 8 cents. If we compare this to other stores like the "cheap" Walmart & Kroger, we get about 9 cents. On the other hand, if we compare to the "expensive" Whole Fools & Wheatsville, those two stores have a difference of 7 cents. Even in close categories or "sides", we see that the differences are around 8 cents; from stores like Kroger to Whole Foods, the difference would easily exceed a dollar. Therefore, we can likely say that **Central Market charges similar prices to H-E-B for the same product**.
 
 ## Part F
+```{r}
+groceries$Income10K = groceries$Income / 10000
+income_model = lm(Price ~ Product + Income10K, data = groceries)
+```
+**Consumers in poorer ZIP codes usually pay slightly more for a product on average** because Income10K had a coefficient of `r round(coef(income_model)["Income10K"][[1]], 3)` which indicates that for every $10,000 increase in average income for the ZIP code, the average price of products falls by a cent and a half.
 
+The effect of this variable isn't terribly important as shown in the following sentence. A one-standard deviation increase in the income of a ZIP code seems to be associated with a `r get_regression_table(income_model, conf.level = 0.95, digits=2)[[41,3]]` standard-deviation change in the price that consumers in that ZIP code expect to pay for the same product.
 
 # Problem 3
+Statement A is **true.** 
 
-## Statement A
+Statement B is **undecidable.**
 
-## Statement B
+Statement C is **true.**
 
-## Statement C
+Statement D is **false.**
 
-## Statement D
-
-## Statement E
+Statement E is **true.**
