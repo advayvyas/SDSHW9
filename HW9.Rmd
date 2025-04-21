@@ -1,0 +1,194 @@
+---
+title: 'Homework #9'
+author: "Advay Vyas"
+date: 4/21/25
+output:
+  pdf_document:
+    toc: true
+urlcolor: blue
+linkcolor: red
+---
+
+```{r global_options, echo=FALSE}
+knitr::opts_chunk$set(fig.height=4, fig.width=6, fig.align = "center", warning=FALSE, echo=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60))
+```
+
+------------------------------------------------------------------------
+
+```{r, results='hide', warning=FALSE, message=FALSE}
+# loading libraries
+library(tidyverse)
+library(ggplot2)
+library(lubridate)
+library(sas7bdat)
+library(rvest)
+library(stringr)
+library(boot)
+library(mosaic)
+library(MatchIt)
+```
+
+# Introduction
+I'm Advay Vyas, EID: av37899, and this is my submission for SDS 315 Statistical Thinking Homework #9. The GitHub repository for my code is at this [link](https://github.com/advayvyas/SDSHW9).
+
+\newpage
+
+# Problem 1
+```{r}
+solder = read.csv("solder.csv")
+ggsolder = ggplot(solder)
+```
+
+## Part A
+```{r, fig.height = 3}
+ggsolder + geom_boxplot(aes(y=skips, fill=Opening)) + facet_wrap(~Opening) + 
+  labs(title = "Distribution of Solder Skips by Solder Gun Opening Size", y = "Skips") +
+   theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())
+```
+From this plot, we can easily see that the size of the opening affects the amount of solder skips by examining the faceted box plots' vertical placement.
+
+```{r, fig.height = 3}
+ggsolder + geom_boxplot(aes(y=skips, fill = Solder)) + facet_wrap(~Solder) + 
+  labs(title = "Distribution of Solder Skips by Alloy Thickness", y = "Skips") +
+   theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())
+```
+From this plot, we can see that alloy thickness has an effect on the amount of solder skips, with thinner alloys contributing to usually higher amounts of solder skips.
+
+## Part B
+```{r}
+solder_model = lm(skips ~ Solder + Opening + Solder:Opening, data = solder)
+```
+
+```{r, cache=TRUE}
+results_solder = do(10000) * {
+  model = lm(skips ~ Solder + Opening + Solder:Opening, data = mosaic::resample(solder))
+  y_int = as.numeric(coef(model)[1])
+  solder_t = as.numeric(coef(model)[2])
+  opening_m = as.numeric(coef(model)[3])
+  opening_s = as.numeric(coef(model)[4])
+  solder_thin_m = as.numeric(coef(model)[5])
+  solder_thin_s = as.numeric(coef(model)[6])
+  data.frame(y_intercept = y_int,
+             solder_thin = solder_t,
+             opening_med = opening_m,
+             opening_small = opening_s,
+             solder_thin_med = solder_thin_m,
+             solder_thin_small = solder_thin_s)
+}
+```
+
+```{r, message=FALSE}
+# y-intercept
+ci_y_intercept <- confint(results_solder$y_intercept, level = 0.95)
+est_y_intercept <- mean(results_solder$y_intercept)
+
+# solder_thin
+ci_solder_thin <- confint(results_solder$solder_thin, level = 0.95)
+est_solder_thin <- mean(results_solder$solder_thin)
+
+# opening_med
+ci_opening_med <- confint(results_solder$opening_med, level = 0.95)
+est_opening_med <- mean(results_solder$opening_med)
+
+# opening_small
+ci_opening_small <- confint(results_solder$opening_small, level = 0.95)
+est_opening_small <- mean(results_solder$opening_small)
+
+# solder_thin_med
+ci_solder_thin_med <- confint(results_solder$solder_thin_med, level = 0.95)
+est_solder_thin_med <- mean(results_solder$solder_thin_med)
+
+# solder_thin_small
+ci_solder_thin_small <- confint(results_solder$solder_thin_small, level = 0.95)
+est_solder_thin_small <- mean(results_solder$solder_thin_small)
+
+library(tibble)
+
+results_table <- tibble(
+  Condition = c(
+    "Baseline", 
+    "SolderThin", "OpeningMid", "OpeningSmall", 
+    "SolderThin:OpeningMid", "SolderThin:OpeningSmall"
+  ),
+  Estimate = round(c(est_y_intercept,
+    est_solder_thin, est_opening_med, est_opening_small, 
+    est_solder_thin_med, est_solder_thin_small
+  ), 3),
+  CI_Lower = round(c(ci_y_intercept[1,1],
+    ci_solder_thin[1, 1], ci_opening_med[1, 1], ci_opening_small[1, 1], 
+    ci_solder_thin_med[1, 1], ci_solder_thin_small[1, 1]
+  ), 5),
+  CI_Upper = round(c(ci_y_intercept[1,2],
+    ci_solder_thin[1, 2], ci_opening_med[1, 2], ci_opening_small[1, 2], 
+    ci_solder_thin_med[1, 2], ci_solder_thin_small[1, 2]
+  ), 5)
+)
+
+knitr::kable(results_table, caption = "Coefficients of the fitted linear regression model")
+```
+
+## Part C
+If we round every coefficient to 0, we now create the equation below representing the amount of skips as $\hat{y}$ and the corresponding effect variables and y-intercept.
+\begin{align*}
+\hat{y} ={}&\ 0 
++ 2 \cdot \text{SolderThin} 
++ 2 \cdot \text{OpeningMid} 
++ 5 \cdot \text{OpeningSmall} \\
+& - 1 \cdot \text{SolderThin} \cdot \text{OpeningMid} 
++ 10 \cdot \text{SolderThin} \cdot \text{OpeningSmall}
+\end{align*}
+
+* The y-intercept indicates that the predicted skips for SolderThick & OpeningLarge is 0 (the baseline)
+* The effect of the SolderThin variable is 2, so you add two skips when you have SolderThin
+* Similarly, this means the effect of having the OpeningMid variable raises the prediction by 2
+* Having OpeningSmall raises the predicted amount of skips by 5
+* Having both SolderThin and OpeningMid together reduces the predicted amount of skips by 1
+* Having both SolderThin and OpeningSmall greatly increases the predicted amount of skips by 10
+
+
+## Part D
+
+We first have to tabulate every possible combination. For SolderThin, we immediately have 2 for the expected amount of skips. Considering small, medium, and large openings, we have that OpeningMid adds 2 and OpeningSmall adds 5 so 7, 4, 2 respectively. Considering the interactions, SolderThin and OpeningMid reduces the predicted skips by 1 and SolderThin and OpeningSmall increases the predicted skips by 10 resulting in 17, 3, 2 for SolderThin and OpeningSmall, OpeningMed, OpeningLarge respectively. 
+
+The calculations become much simpler for SolderThick due to no interaction variables. We simply add the effect variable to 0 since SolderThick has "no effect." With OpeningSmall (+5), OpeningMid (+2), and OpeningLarge (+0 b/c no effect variable and it is the baseline) and we get 5, 2, 0 respectively. The results are tabulated in the table below.
+
+```{r}
+combos = data.frame (
+  Solder = c("Thin", "Thin", "Thin", "Thick", "Thick", "Thick"),
+  Opening = c("S", "M", "L", "S", "M", "L"),
+  Skips = c(17,3,2,5,2,0)
+)
+ 
+knitr::kable(combos, caption = "Combinations of Solder Thicknesses and Solder Gun Openings and Predicted Skips")
+```
+
+Since soldering skips are manufacturing defects, I'd like to recommend the combination with the least amount of defects which is **SolderThick and OpeningLarge**. This trend is also seen in the earlier plots, as a thick solder and a large solder gun opening each had the least average skips in their categories.
+
+
+
+# Problem 2
+
+## Part A
+
+## Part B
+
+## Part C
+
+## Part D
+
+## Part E
+
+## Part F
+
+
+# Problem 3
+
+## Statement A
+
+## Statement B
+
+## Statement C
+
+## Statement D
+
+## Statement E
